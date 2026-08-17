@@ -53,6 +53,7 @@ export const BOOLEAN_FLAGS = new Set([
   'tasks',
   'text-stdin',
   'unread',
+  'updates',
   'value-stdin',
   'wait'
 ])
@@ -196,45 +197,6 @@ export function effectiveAllowedFlags(spec: CommandSpec): string[] {
       ...(supportsBrowserPageFlag(spec.path) ? ['page'] : [])
     ])
   ]
-}
-
-export function isCommandGroup(commandPath: string[]): boolean {
-  return (
-    (commandPath.length === 1 &&
-      [
-        'account',
-        'artifacts',
-        'automations',
-        'project',
-        'host',
-        'repo',
-        'worktree',
-        'terminal',
-        'file',
-        'tab',
-        'cookie',
-        'intercept',
-        'capture',
-        'mouse',
-        'set',
-        'clipboard',
-        'dialog',
-        'storage',
-        'orchestration',
-        'computer',
-        'emulator',
-        'agent',
-        'environment',
-        'diagnostics',
-        'linear',
-        'skills',
-        'vm'
-      ].includes(commandPath[0])) ||
-    (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
-    (commandPath.length === 2 &&
-      commandPath[0] === 'storage' &&
-      ['local', 'session'].includes(commandPath[1]))
-  )
 }
 
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
