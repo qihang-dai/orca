@@ -149,6 +149,55 @@ describe('native chat transcript resolve polling', () => {
     expect(engine.unsubscribe).toHaveBeenCalled()
   })
 
+  // The deadline notice is generic; the gate's message names a stalled distro and
+  // says to retry. A distro that goes unhealthy after the deadline must not be
+  // silenced by the notice that fired first.
+  it('still surfaces a WSL gate refusal that follows the unresolved-transcript notice', async () => {
+    const errors: (string | undefined)[] = []
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session-id',
+      resolvePollIntervalMs: 10,
+      unresolvedNoticeMs: 100,
+      onAppend: () => {},
+      onInitialSnapshot: (_messages, _hasMore, _beforeOffset, error) => errors.push(error)
+    })
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(errors).toEqual([
+      expect.stringMatching(/no transcript found for this session on this machine/i)
+    ])
+
+    mocks.resolve.mockRejectedValue(new WslTranscriptFsError('unavailable', 'stuck permits'))
+    await vi.advanceTimersByTimeAsync(50)
+    expect(errors).toEqual([
+      expect.stringMatching(/no transcript found for this session on this machine/i),
+      'stuck permits'
+    ])
+
+    subscription.unsubscribe()
+  })
+
+  it('keeps polling when the advisory subscriber throws', async () => {
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session-id',
+      resolvePollIntervalMs: 10,
+      unresolvedNoticeMs: 100,
+      onAppend: () => {},
+      onInitialSnapshot: () => {
+        throw new Error('subscriber blew up')
+      }
+    })
+
+    await vi.advanceTimersByTimeAsync(150)
+    const resolvesAtNotice = mocks.resolve.mock.calls.length
+    await vi.advanceTimersByTimeAsync(100)
+    expect(mocks.resolve.mock.calls.length).toBeGreaterThan(resolvesAtNotice)
+
+    subscription.unsubscribe()
+  })
+
   it('still fails subscribe on non-gate resolver errors', async () => {
     mocks.resolve.mockRejectedValueOnce(new Error('resolver crashed'))
 

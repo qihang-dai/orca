@@ -636,6 +636,56 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     expect(latest?.error).toBe('No transcript found')
   })
 
+  // The advisory carries no transcript: a pane that already read history must
+  // keep it rather than trade it for an error card.
+  it('keeps already-read history when an error frame arrives', async () => {
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    transport.readSession.mockResolvedValue({ messages: [assistant('a-1', 'hello')] })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
+
+    await act(async () => {
+      transport.emit({
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'No transcript found for this session on this machine.'
+      })
+    })
+
+    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
+  })
+
+  // #13663: the main-side unresolved-transcript notice and this hook's notFound
+  // window both expire at ~60s on the same unreadable transcript. The stream's
+  // copy is the specific one, so the seed's generic miss must not replace it.
+  it('keeps the stream error copy when the read retry window expires after it', async () => {
+    vi.useFakeTimers()
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(55_000)
+      transport.emit({
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'No transcript found for this session on this machine.'
+      })
+    })
+    expect(latest?.error).toBe('No transcript found for this session on this machine.')
+
+    // Past the seed's 60s window: its miss resolves last and must stay silent.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+    expect(latest?.status).toBe('error')
+    expect(latest?.error).toBe('No transcript found for this session on this machine.')
+  })
+
   it('renders live-appended content instead of loading while the read is still retrying', async () => {
     vi.useFakeTimers()
     const transport = getMockTransport('env-1', { autoSnapshot: false })

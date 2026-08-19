@@ -49,16 +49,16 @@ async function attemptInstall(
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
-// Why: a transcript this host can never open (the agent runs on an SSH remote,
-// so the file is on that machine — #13663) is indistinguishable here from one
-// that simply has not flushed yet, and both poll forever. Past this deadline
-// say so instead of spinning silently. Deliberately longer than the observed
-// worst-case first flush (#8401): the notice is non-terminal, so paying a
-// generous wait costs a late message, while being too eager costs a false one
-// on a healthy session.
+// Why: a transcript this host can never open (the agent runs on an SSH remote —
+// #13663) is indistinguishable from one that just hasn't flushed yet, and both
+// poll forever. Past this deadline say so instead of spinning silently. A slow
+// first flush can legitimately exceed it (#8401), so this is advisory only: the
+// poll keeps running and the real transcript replaces the notice.
 const UNRESOLVED_NOTICE_MS = 60_000
+// Claims only what the deadline establishes — nothing resolved here — because a
+// remote host, a cold WSL distro and a slow first flush all land on it.
 const UNRESOLVED_TRANSCRIPT_MESSAGE =
-  'Transcript unavailable on this host. If this agent runs on a remote machine, its transcript lives there.'
+  'No transcript found for this session on this machine. If the agent runs on a remote host its transcript lives there; otherwise it may not have been written yet.'
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
@@ -72,6 +72,8 @@ function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | 
  * unsubscribe() cancels it. Reports watching:true — the engine's first drain
  * delivers the initial snapshot once the file appears, so subscribers must not
  * settle a merely not-yet-flushed transcript into a permanent error (#8401).
+ * Past UNRESOLVED_NOTICE_MS it emits one advisory error snapshot (#13663) and
+ * keeps polling, so a late transcript still replaces it.
  */
 function subscribeViaResolvePoll(
   args: SubscribeNativeChatTranscriptArgs,
@@ -88,9 +90,12 @@ function subscribeViaResolvePoll(
   // the exact-path install doesn't wait on the slower id-glob (#10326).
   let hostReadableExactPath: string | null = null
   let lastWslTranslateAt = 0
-  // Latches only once a frame was actually emitted, so a subscriber without the
-  // callback can't suppress it for a later one.
+  // Separate latches: the WSL gate's retryable message is the actionable one, so
+  // it must still reach a subscriber that already got the generic deadline
+  // notice — never the reverse. Both set only after an actual emit, so a
+  // subscriber without the callback can't consume the one frame each gets.
   let gateErrorEmitted = false
+  let unresolvedNoticeEmitted = false
   const startedAt = Date.now()
   const unresolvedNoticeMs = args.unresolvedNoticeMs ?? UNRESOLVED_NOTICE_MS
   const resolveController = new AbortController()
@@ -98,14 +103,19 @@ function subscribeViaResolvePoll(
   /** Non-terminal: the poll keeps running and a later real snapshot replaces
    *  this, so a slow-to-flush session still recovers (#8401). */
   function emitUnresolvedNotice(): void {
-    if (gateErrorEmitted || !args.onInitialSnapshot) {
+    if (gateErrorEmitted || unresolvedNoticeEmitted || !args.onInitialSnapshot) {
       return
     }
     if (Date.now() - startedAt < unresolvedNoticeMs) {
       return
     }
-    gateErrorEmitted = true
-    args.onInitialSnapshot([], false, 0, UNRESOLVED_TRANSCRIPT_MESSAGE)
+    unresolvedNoticeEmitted = true
+    try {
+      args.onInitialSnapshot([], false, 0, UNRESOLVED_TRANSCRIPT_MESSAGE)
+    } catch {
+      // A subscriber that throws (an emit on a dying RPC connection) must not
+      // escape `void runAttempt()` as an unhandled rejection.
+    }
   }
 
   function scheduleAttempt(): void {
@@ -192,8 +202,9 @@ function subscribeViaResolvePoll(
       installed = result
       return
     }
-    emitUnresolvedNotice()
+    // Schedule first: a subscriber callback that throws must not kill the poll.
     scheduleAttempt()
+    emitUnresolvedNotice()
   }
 
   scheduleAttempt()
