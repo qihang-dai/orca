@@ -198,6 +198,29 @@ describe('native chat transcript resolve polling', () => {
     subscription.unsubscribe()
   })
 
+  // Sibling of the advisory case: the gate's emit runs inside runAttempt's catch,
+  // so a throw there escapes `void runAttempt()` and skips the reschedule below it.
+  it('keeps polling when the WSL-gate subscriber throws', async () => {
+    mocks.resolve.mockRejectedValue(new WslTranscriptFsError('unavailable', 'stuck permits'))
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session-id',
+      resolvePollIntervalMs: 10,
+      unresolvedNoticeMs: 10_000,
+      onAppend: () => {},
+      onInitialSnapshot: () => {
+        throw new Error('subscriber blew up')
+      }
+    })
+
+    await vi.advanceTimersByTimeAsync(50)
+    const resolvesAtGateError = mocks.resolve.mock.calls.length
+    await vi.advanceTimersByTimeAsync(100)
+    expect(mocks.resolve.mock.calls.length).toBeGreaterThan(resolvesAtGateError)
+
+    subscription.unsubscribe()
+  })
+
   it('still fails subscribe on non-gate resolver errors', async () => {
     mocks.resolve.mockRejectedValueOnce(new Error('resolver crashed'))
 

@@ -100,6 +100,17 @@ function subscribeViaResolvePoll(
   const unresolvedNoticeMs = args.unresolvedNoticeMs ?? UNRESOLVED_NOTICE_MS
   const resolveController = new AbortController()
 
+  /** Both advisories run under `void runAttempt()`, so a subscriber that throws
+   *  (an emit on a dying RPC connection) would surface as an unhandled rejection
+   *  and skip the rest of the attempt — including its reschedule. Contain it. */
+  function emitAdvisory(message: string): void {
+    try {
+      args.onInitialSnapshot?.([], false, 0, message)
+    } catch {
+      // Advisory only: keep polling so a later real snapshot still replaces it.
+    }
+  }
+
   /** Non-terminal: the poll keeps running and a later real snapshot replaces
    *  this, so a slow-to-flush session still recovers (#8401). */
   function emitUnresolvedNotice(): void {
@@ -110,12 +121,7 @@ function subscribeViaResolvePoll(
       return
     }
     unresolvedNoticeEmitted = true
-    try {
-      args.onInitialSnapshot([], false, 0, UNRESOLVED_TRANSCRIPT_MESSAGE)
-    } catch {
-      // A subscriber that throws (an emit on a dying RPC connection) must not
-      // escape `void runAttempt()` as an unhandled rejection.
-    }
+    emitAdvisory(UNRESOLVED_TRANSCRIPT_MESSAGE)
   }
 
   function scheduleAttempt(): void {
@@ -189,7 +195,7 @@ function subscribeViaResolvePoll(
       // runAttempt is invoked as `void runAttempt()`.
       if (error instanceof WslTranscriptFsError && !gateErrorEmitted && args.onInitialSnapshot) {
         gateErrorEmitted = true
-        args.onInitialSnapshot([], false, 0, error.message)
+        emitAdvisory(error.message)
       }
       result = null
     }
