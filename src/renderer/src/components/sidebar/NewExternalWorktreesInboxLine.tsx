@@ -8,6 +8,9 @@ import { translate } from '@/i18n/i18n'
 
 type NewExternalWorktreesInboxLineProps = {
   repoDisplayName: string
+  /** Host this checkout lives on. Set only when the project is checked out on
+   *  more than one host, where the count alone cannot identify the row. */
+  hostContextLabel?: string
   inboxCount: number
   pending: boolean
   error: string | null
@@ -18,6 +21,7 @@ type NewExternalWorktreesInboxLineProps = {
 
 export default function NewExternalWorktreesInboxLine({
   repoDisplayName,
+  hostContextLabel,
   inboxCount,
   pending,
   error,
@@ -29,10 +33,19 @@ export default function NewExternalWorktreesInboxLine({
     'auto.components.sidebar.NewExternalWorktreesInboxLine.c3e8a1f4b2',
     "Don't show again"
   )
+  // Why: the same project on two hosts renders two identical rows, so every
+  // accessible name has to name the host as well as the project.
+  const repoScopeLabel = hostContextLabel
+    ? translate(
+        'auto.components.sidebar.NewExternalWorktreesInboxLine.6c07f3a91e',
+        '{{value0}} on {{value1}}',
+        { value0: repoDisplayName, value1: hostContextLabel }
+      )
+    : repoDisplayName
   const suppressAriaLabel = translate(
     'auto.components.sidebar.NewExternalWorktreesInboxLine.9f2d4c8b17',
     'Hide external worktrees permanently for {{value0}}',
-    { value0: repoDisplayName }
+    { value0: repoScopeLabel }
   )
   const isSingular = inboxCount === 1
   const countLabel = isSingular
@@ -48,12 +61,12 @@ export default function NewExternalWorktreesInboxLine({
     ? translate(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.7f18c5b0d3',
         'Review {{value0}} hidden worktree in {{value1}}',
-        { value0: inboxCount, value1: repoDisplayName }
+        { value0: inboxCount, value1: repoScopeLabel }
       )
     : translate(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.4e2b7a9c05',
         'Review {{value0}} hidden worktrees in {{value1}}',
-        { value0: inboxCount, value1: repoDisplayName }
+        { value0: inboxCount, value1: repoScopeLabel }
       )
 
   if (inboxCount === 0) {
@@ -83,6 +96,11 @@ export default function NewExternalWorktreesInboxLine({
             {inboxCount}
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{countLabel}</span>
+          {hostContextLabel ? (
+            <span className="min-w-0 shrink truncate text-[10px] leading-none text-muted-foreground">
+              {hostContextLabel}
+            </span>
+          ) : null}
           <ChevronRight
             aria-hidden="true"
             className={cn(

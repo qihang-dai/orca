@@ -25,7 +25,8 @@ export function emitPinnedGroup(
   lineageById: Record<string, WorktreeLineage>,
   worktreeMap: Map<string, Worktree>,
   nestLineage: boolean,
-  cyclicLineageIds: ReadonlySet<string>
+  cyclicLineageIds: ReadonlySet<string>,
+  noticeHostContextLabelByRepoId?: ReadonlyMap<string, string>
 ): void {
   if (pinnedSectionWorktrees.length === 0) {
     return
@@ -61,7 +62,13 @@ export function emitPinnedGroup(
     for (const repoId of pinnedRepoOrder) {
       const candidate = importedWorktreesByRepo.get(repoId)
       if (allowImportedFallback && candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
-        result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
+        result.push(
+          buildImportedWorktreesCardRow(
+            candidate,
+            'pinned-fallback',
+            noticeHostContextLabelByRepoId?.get(repoId)
+          )
+        )
       }
     }
     return
@@ -91,7 +98,15 @@ export function emitPinnedGroup(
   for (const [repoId, index] of inserts) {
     const candidate = importedWorktreesByRepo.get(repoId)
     if (candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
-      result.splice(index + 1, 0, buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
+      result.splice(
+        index + 1,
+        0,
+        buildImportedWorktreesCardRow(
+          candidate,
+          'pinned-fallback',
+          noticeHostContextLabelByRepoId?.get(repoId)
+        )
+      )
     }
   }
 }

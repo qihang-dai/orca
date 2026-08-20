@@ -32,25 +32,29 @@ export function buildPendingCreationRow(
 
 export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
-  placement: ImportedWorktreesCardRow['placement']
+  placement: ImportedWorktreesCardRow['placement'],
+  hostContextLabel?: string
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
     key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement
+    placement,
+    ...(hostContextLabel ? { hostContextLabel } : {})
   }
 }
 
 export function buildNewExternalWorktreesInboxRow(
-  candidate: NewExternalWorktreesInboxCandidate
+  candidate: NewExternalWorktreesInboxCandidate,
+  hostContextLabel?: string
 ): NewExternalWorktreesInboxRow {
   return {
     type: 'new-external-worktrees-inbox',
     key: `new-external-worktrees-inbox:${candidate.repo.id}`,
     repo: candidate.repo,
-    inboxWorktrees: candidate.inboxWorktrees
+    inboxWorktrees: candidate.inboxWorktrees,
+    ...(hostContextLabel ? { hostContextLabel } : {})
   }
 }
 

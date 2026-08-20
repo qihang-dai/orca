@@ -16,7 +16,8 @@ import type { SectionAppendContext } from './group-sections'
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
-  getMixedWorktreeHostContextLabels
+  getMixedWorktreeHostContextLabels,
+  getNoticeHostContextLabels
 } from './host-labels'
 import { buildProjectGroupingIndex } from './project-grouping'
 import type { ProjectGroupingModel } from './project-grouping'
@@ -110,6 +111,15 @@ export function buildRows(
     hostLabelById,
     defaultHostId
   )
+  // Why here and not per section: a notice row can land in the pinned section
+  // instead of its project's own, and the host ambiguity it resolves belongs to
+  // the project either way.
+  const noticeHostContextLabelByRepoId = getNoticeHostContextLabels(
+    new Set([...importedWorktreesByRepo.keys(), ...newExternalWorktreesInboxByRepo.keys()]),
+    repoMap,
+    projectIndex,
+    hostLabelById
+  )
   const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
     groupBy,
     worktrees: naturalWorktrees,
@@ -132,7 +142,8 @@ export function buildRows(
     lineageById,
     worktreeMap,
     nestLineage,
-    cyclicLineageIds
+    cyclicLineageIds,
+    noticeHostContextLabelByRepoId
   )
   if (groupBy === 'none') {
     // Why folder workspaces gate this too: an account with only folder
@@ -208,6 +219,7 @@ export function buildRows(
     newExternalWorktreesInboxByRepo,
     pendingByRepo,
     mixedWorktreeHostContextLabels,
+    noticeHostContextLabelByRepoId,
     lineageById,
     worktreeMap,
     nestLineage,

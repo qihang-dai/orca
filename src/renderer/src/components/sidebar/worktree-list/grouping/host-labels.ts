@@ -7,7 +7,11 @@ import {
 } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { ProjectGroupingIndex, WorktreeGroupEntry } from './project-grouping'
+import {
+  getProjectGroupingForRepo,
+  type ProjectGroupingIndex,
+  type WorktreeGroupEntry
+} from './project-grouping'
 import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 
@@ -46,6 +50,44 @@ export function getMixedHostContextLabels(
     uniqueLabels.add(label)
   }
   return uniqueLabels.size > 1 ? labelsByRepoId : undefined
+}
+
+/**
+ * Host labels for the sidebar's notice rows, keyed by repo id.
+ *
+ * Why not getMixedHostContextLabels: a notice row can render outside its
+ * project's own section (pinned fallback), and the ambiguity it has to resolve
+ * belongs to the project — one project checked out on several hosts emits one
+ * identical-looking row per host. So the mixed test runs per project, not per
+ * rendered group.
+ */
+export function getNoticeHostContextLabels(
+  noticeRepoIds: Iterable<string>,
+  repoMap: Map<string, Repo>,
+  projectIndex: ProjectGroupingIndex | null,
+  hostLabelById: ReadonlyMap<string, string> | undefined
+): Map<string, string> | undefined {
+  const labelsByRepoIdForProject = new Map<string, Map<string, string>>()
+  for (const repoId of noticeRepoIds) {
+    const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
+    if (!label) {
+      continue
+    }
+    const projectKey = getProjectGroupingForRepo(repoId, repoMap, projectIndex).projectId ?? repoId
+    const labelsByRepoId = labelsByRepoIdForProject.get(projectKey) ?? new Map<string, string>()
+    labelsByRepoId.set(repoId, label)
+    labelsByRepoIdForProject.set(projectKey, labelsByRepoId)
+  }
+  const mixed = new Map<string, string>()
+  for (const labelsByRepoId of labelsByRepoIdForProject.values()) {
+    if (new Set(labelsByRepoId.values()).size < 2) {
+      continue
+    }
+    for (const [repoId, label] of labelsByRepoId) {
+      mixed.set(repoId, label)
+    }
+  }
+  return mixed.size > 0 ? mixed : undefined
 }
 
 /** Keyed by host-qualified identity: two hosts sharing an id need two labels. */
