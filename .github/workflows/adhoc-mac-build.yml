@@ -311,7 +311,6 @@ jobs:
           including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
-
       - name: Publish adhoc macOS artifacts
         uses: nick-fields/retry@v4
         with:

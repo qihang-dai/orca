@@ -22,7 +22,9 @@ const shellContractFiles = [
 ]
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
+  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
+  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts',
+  'src/shared/pty-cooked-querier-reply-delivery.node-pty.test.ts'
 ]
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [
@@ -82,6 +84,7 @@ describe('PR workflow parallelism', () => {
 
     expect(shellStep).toBeDefined()
     expect(shellInstall).toBeDefined()
+    expect(workflow.jobs.shell_contracts.env.ORCA_REQUIRE_NODE_PTY_ECHO_STATE).toBe('1')
     expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
     // Why the whole workflow, not just the general shards: any other lane installing
     // these shells would silently start running the real-shell tests twice.

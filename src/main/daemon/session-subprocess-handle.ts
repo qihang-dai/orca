@@ -1,3 +1,4 @@
+import type { PtySlaveEchoSyncProbe } from '../../shared/pty-slave-line-discipline-echo'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type SubprocessHandle = {
@@ -17,6 +18,9 @@ export type SubprocessHandle = {
   /** Slave device path, so startup replies can read the line discipline's ECHO bit before
    *  writing. Absent on handles with no POSIX slave to read (ConPTY, tests). */
   slavePath?: string
+  /** Fork-free read of the same ECHO bit, so a reply that needs no wait is not deferred
+   *  into the next turn (#13892). Absent when node-pty lacks Orca's patch. */
+  echoSyncProbe?: PtySlaveEchoSyncProbe
   write(data: string): void
   resize(cols: number, rows: number): void
   /** Stop reading the PTY fd (node-pty pause()) so a flooding child blocks on write. Optional:

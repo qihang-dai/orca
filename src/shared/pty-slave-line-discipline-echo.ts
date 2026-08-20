@@ -14,6 +14,9 @@ export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown'
 
 export type PtySlaveLineEditorProbe = () => Promise<PtySlaveLineEditorState>
 
+/** Same verdict, read without a fork — cheap enough to consult inside a query's own turn. */
+export type PtySlaveEchoSyncProbe = () => PtySlaveLineDisciplineEcho
+
 const STTY_TIMEOUT_MS = 2_000
 // `stty -a` prints the lflags as a space-separated list where a disabled flag is
 // prefixed with `-`, so `echo` and `-echo` are the two tokens that matter.
@@ -86,6 +89,43 @@ function runStty(ptsName: string, platform: NodeJS.Platform): Promise<SttyProbeR
 export function readPtySlavePath(pty: unknown): string | undefined {
   const candidate = (pty as { ptsName?: unknown } | null | undefined)?.ptsName
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
+}
+
+/**
+ * Fork-free ECHO read off the master fd Orca already owns (#13892).
+ *
+ * Linux and the BSDs (so macOS) redirect a master's mode ioctls to the slave — POSIX
+ * does not specify pty master termios, so this is per-kernel behaviour, covered by the
+ * node-pty lane on both platforms. node-pty's patched
+ * `readEchoState` answers for the slave without a subprocess — which is what makes it
+ * usable inside the query's own event-loop turn, where the async probe is not. A host
+ * whose node-pty is unpatched (older relay, upstream prebuild) has no such method and
+ * gets no probe, so it keeps today's deferred behavior with no wire change.
+ */
+export function createPtySlaveEchoSyncProbe(
+  pty: unknown,
+  platform: NodeJS.Platform = process.platform
+): PtySlaveEchoSyncProbe | undefined {
+  if (platform === 'win32') {
+    return undefined
+  }
+  const readEchoState = (pty as { readEchoState?: unknown } | null | undefined)?.readEchoState
+  if (typeof readEchoState !== 'function') {
+    return undefined
+  }
+  return () => {
+    let state: unknown
+    try {
+      state = (readEchoState as (this: unknown) => unknown).call(pty)
+    } catch {
+      return 'unknown'
+    }
+    if (state === 1) {
+      return 'echoing'
+    }
+    // -1 (unreadable fd) and anything unexpected must not read as proof of quiet.
+    return state === 0 ? 'quiet' : 'unknown'
+  }
 }
 
 /**

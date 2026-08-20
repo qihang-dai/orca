@@ -5,6 +5,7 @@ vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import {
   createPtySlaveEchoProbe,
+  createPtySlaveEchoSyncProbe,
   createPtySlaveLineEditorProbe,
   readPtySlavePath
 } from './pty-slave-line-discipline-echo'
@@ -153,5 +154,53 @@ describe('createPtySlaveLineEditorProbe', () => {
     const probe = createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')
     answerStty('lflags: -echo\ncchars: lnext = <undef>;\n')
     await expect(probe?.()).resolves.toBe('unknown')
+  })
+})
+
+describe('createPtySlaveEchoSyncProbe', () => {
+  it('maps the native ECHO bit to the same verdicts as the stty probe', () => {
+    expect(createPtySlaveEchoSyncProbe({ readEchoState: () => 1 }, 'darwin')?.()).toBe('echoing')
+    expect(createPtySlaveEchoSyncProbe({ readEchoState: () => 0 }, 'linux')?.()).toBe('quiet')
+  })
+
+  it('has no probe to offer where there is no line discipline or no patched node-pty', () => {
+    // ConPTY: the fast path must never engage on Windows.
+    expect(createPtySlaveEchoSyncProbe({ readEchoState: () => 0 }, 'win32')).toBeUndefined()
+    // An unpatched or prebuilt binding — an older relay host is exactly this shape.
+    expect(createPtySlaveEchoSyncProbe({}, 'darwin')).toBeUndefined()
+    expect(createPtySlaveEchoSyncProbe({ readEchoState: 'nope' }, 'darwin')).toBeUndefined()
+    expect(createPtySlaveEchoSyncProbe(undefined, 'darwin')).toBeUndefined()
+    expect(createPtySlaveEchoSyncProbe(null, 'darwin')).toBeUndefined()
+  })
+
+  it('never reads a failure as proof of quiet', () => {
+    // -1 is the addon's own "fd unreadable" answer; a throw is a reaped pty.
+    expect(createPtySlaveEchoSyncProbe({ readEchoState: () => -1 }, 'darwin')?.()).toBe('unknown')
+    expect(createPtySlaveEchoSyncProbe({ readEchoState: () => undefined }, 'darwin')?.()).toBe(
+      'unknown'
+    )
+    expect(
+      createPtySlaveEchoSyncProbe(
+        {
+          readEchoState: () => {
+            throw new Error('EBADF')
+          }
+        },
+        'darwin'
+      )?.()
+    ).toBe('unknown')
+  })
+
+  it('reads the bit through the terminal, so a live toggle is observed', () => {
+    const term = {
+      echo: 1,
+      readEchoState(): number {
+        return this.echo
+      }
+    }
+    const probe = createPtySlaveEchoSyncProbe(term, 'darwin')
+    expect(probe?.()).toBe('echoing')
+    term.echo = 0
+    expect(probe?.()).toBe('quiet')
   })
 })
