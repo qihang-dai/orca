@@ -113,9 +113,11 @@ export function buildRows(
   )
   // Why here and not per section: a notice row can land in the pinned section
   // instead of its project's own, and the host ambiguity it resolves belongs to
-  // the project either way.
+  // the project either way. repoMap is the unfiltered universe; the candidate
+  // maps are host-filter scoped, so only they gate eligibility.
   const noticeHostContextLabelByRepoId = getNoticeHostContextLabels(
     new Set([...importedWorktreesByRepo.keys(), ...newExternalWorktreesInboxByRepo.keys()]),
+    repoMap.keys(),
     repoMap,
     projectIndex,
     hostLabelById

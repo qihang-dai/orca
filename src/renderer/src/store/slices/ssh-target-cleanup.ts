@@ -19,28 +19,14 @@ export function sshConnectionStatesEqual(
   )
 }
 
-/** Hostname is optional: callers that only know a target's identity still fold
- *  into the same hydration path, they just contribute no host mapping. */
-export type SshTargetMetadata = Pick<SshTarget, 'id' | 'label'> & Partial<Pick<SshTarget, 'host'>>
-
 export function sshTargetLabelsEqual(
   labels: Map<string, string>,
-  targets: SshTargetMetadata[]
+  targets: Pick<SshTarget, 'id' | 'label'>[]
 ): boolean {
   if (labels.size !== targets.length) {
     return false
   }
   return targets.every((target) => labels.get(target.id) === target.label)
-}
-
-export function sshTargetHostsEqual(
-  hostsById: Map<string, string>,
-  targets: SshTargetMetadata[]
-): boolean {
-  if (hostsById.size !== targets.filter((target) => Boolean(target.host)).length) {
-    return false
-  }
-  return targets.every((target) => !target.host || hostsById.get(target.id) === target.host)
 }
 
 function collectSshTargetTerminalTabIds(state: AppState, targetId: string): Set<string> {
@@ -220,8 +206,6 @@ export function buildRemovedSshTargetCleanupPatch(
   const removedConnectionState = nextConnectionStates.delete(targetId)
   const nextLabels = new Map(state.sshTargetLabels)
   const removedLabel = nextLabels.delete(targetId)
-  const nextTargetHosts = new Map(state.sshTargetHostsById)
-  const removedTargetHost = nextTargetHosts.delete(targetId)
   const nextHydrated = new Set(state.remoteWorkspaceHydratedTargetIds)
   const removedHydrated = nextHydrated.delete(targetId)
   const removedSyncStatus = Object.hasOwn(state.remoteWorkspaceSyncStatusByTargetId, targetId)
@@ -241,7 +225,6 @@ export function buildRemovedSshTargetCleanupPatch(
     removedTransientClearBlock ||
     removedConnectionState ||
     removedLabel ||
-    removedTargetHost ||
     removedHydrated ||
     removedSyncStatus ||
     removedPortForwards ||
@@ -264,7 +247,6 @@ export function buildRemovedSshTargetCleanupPatch(
       : {}),
     ...(removedConnectionState ? { sshConnectionStates: nextConnectionStates } : {}),
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
-    ...(removedTargetHost ? { sshTargetHostsById: nextTargetHosts } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
     ...(removedSyncStatus ? { remoteWorkspaceSyncStatusByTargetId: nextSyncStatus } : {}),
     ...(removedPortForwards ? { portForwardsByConnection: nextPortForwards } : {}),

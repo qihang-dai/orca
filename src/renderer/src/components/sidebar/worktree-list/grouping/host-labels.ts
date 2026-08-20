@@ -15,6 +15,11 @@ import {
 import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 
+function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): string | null {
+  const repo = repoMap.get(repoId)
+  return repo ? getRepoExecutionHostId(repo) : null
+}
+
 function getRepoHostLabel(
   repoId: string,
   repoMap: Map<string, Repo>,
@@ -56,34 +61,53 @@ export function getMixedHostContextLabels(
  * Host labels for the sidebar's notice rows, keyed by repo id.
  *
  * Why not getMixedHostContextLabels: a notice row can render outside its
- * project's own section (pinned fallback), and the ambiguity it has to resolve
+ * project's own section (pinned fallback), and the ambiguity it resolves
  * belongs to the project — one project checked out on several hosts emits one
- * identical-looking row per host. So the mixed test runs per project, not per
- * rendered group.
+ * identical-looking row per host. So the mixed test runs per project.
+ *
+ * Two inputs, deliberately: `allRepoIds` is the unfiltered universe that decides
+ * whether a project spans hosts, and `noticeRepoIds` is the host-filtered set
+ * eligible for a label. Deriving both from the filtered set would make a label
+ * appear and disappear with the sidebar's host filter.
  */
 export function getNoticeHostContextLabels(
   noticeRepoIds: Iterable<string>,
+  allRepoIds: Iterable<string>,
   repoMap: Map<string, Repo>,
   projectIndex: ProjectGroupingIndex | null,
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): Map<string, string> | undefined {
-  const labelsByRepoIdForProject = new Map<string, Map<string, string>>()
-  for (const repoId of noticeRepoIds) {
+  const eligible = new Set(noticeRepoIds)
+  if (eligible.size === 0) {
+    return undefined
+  }
+  // Why host ids and not labels: two hosts can share one user-facing label, and
+  // that project spans hosts just the same — counting labels hides exactly the
+  // case where the rows are hardest to tell apart.
+  const hostIdsForProject = new Map<string, Set<string>>()
+  const labelsByRepoId = new Map<string, string>()
+  const projectKeyByRepoId = new Map<string, string>()
+  for (const repoId of allRepoIds) {
     const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
     if (!label) {
       continue
     }
     const projectKey = getProjectGroupingForRepo(repoId, repoMap, projectIndex).projectId ?? repoId
-    const labelsByRepoId = labelsByRepoIdForProject.get(projectKey) ?? new Map<string, string>()
-    labelsByRepoId.set(repoId, label)
-    labelsByRepoIdForProject.set(projectKey, labelsByRepoId)
+    const hostId = projectIndex?.setupByRepoId.get(repoId)?.hostId ?? getRepoHostId(repoId, repoMap)
+    if (hostId) {
+      const hostIds = hostIdsForProject.get(projectKey) ?? new Set<string>()
+      hostIds.add(hostId)
+      hostIdsForProject.set(projectKey, hostIds)
+    }
+    if (eligible.has(repoId)) {
+      labelsByRepoId.set(repoId, label)
+      projectKeyByRepoId.set(repoId, projectKey)
+    }
   }
   const mixed = new Map<string, string>()
-  for (const labelsByRepoId of labelsByRepoIdForProject.values()) {
-    if (new Set(labelsByRepoId.values()).size < 2) {
-      continue
-    }
-    for (const [repoId, label] of labelsByRepoId) {
+  for (const [repoId, label] of labelsByRepoId) {
+    const projectKey = projectKeyByRepoId.get(repoId)
+    if (projectKey && (hostIdsForProject.get(projectKey)?.size ?? 0) > 1) {
       mixed.set(repoId, label)
     }
   }

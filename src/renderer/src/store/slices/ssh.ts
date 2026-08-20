@@ -3,14 +3,13 @@ import type { AppState } from '../types'
 import type {
   SshConnectionState,
   PortForwardEntry,
-  EnrichedDetectedPort
+  EnrichedDetectedPort,
+  SshTarget
 } from '../../../../shared/ssh-types'
 import {
   buildRemovedSshTargetCleanupPatch,
   sshConnectionStatesEqual,
-  sshTargetHostsEqual,
-  sshTargetLabelsEqual,
-  type SshTargetMetadata
+  sshTargetLabelsEqual
 } from './ssh-target-cleanup'
 
 export type RemoteWorkspaceSyncStatus = {
@@ -34,10 +33,6 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
-  /** Maps target IDs to their configured hostnames. Lets host-scoped UI tell
-   * whether an SSH target and a paired runtime environment are the same
-   * machine, which labels alone cannot answer. */
-  sshTargetHostsById: Map<string, string>
   /** Maps REMOVED target IDs to their last known label (from re-adoption
    * tombstones). Lets ghost-host UI show a friendly name instead of the raw id
    * for a workspace still pinned to a deleted target. */
@@ -65,7 +60,7 @@ export type SshSlice = {
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
-  setSshTargetsMetadata: (targets: SshTargetMetadata[]) => void
+  setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
@@ -90,7 +85,6 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
-  sshTargetHostsById: new Map(),
   removedSshTargetLabels: new Map(),
   sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
@@ -129,19 +123,13 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set({ removedSshTargetLabels: new Map(Object.entries(labels)) }),
   setSshTargetsMetadata: (targets) =>
     set((s) => {
-      if (
-        sshTargetLabelsEqual(s.sshTargetLabels, targets) &&
-        sshTargetHostsEqual(s.sshTargetHostsById, targets)
-      ) {
+      if (sshTargetLabelsEqual(s.sshTargetLabels, targets)) {
         // Why: an unchanged (even empty) list is still a successful load — the
         // hydration flag must flip on the first fetch of an empty target set.
         return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
       return {
         sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
-        sshTargetHostsById: new Map(
-          targets.flatMap((target) => (target.host ? [[target.id, target.host] as const] : []))
-        ),
         sshTargetsHydrated: true
       }
     }),

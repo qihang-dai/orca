@@ -13,24 +13,10 @@ import {
   getHiddenImportedWorktrees
 } from '../../imported-worktrees-card-candidates'
 import {
-  buildRepoCheckoutKeys,
-  getDuplicateCheckoutNoticeRepoIds
-} from '../../host-checkout-identity'
-import {
   suppressNewExternalWorktreeInbox,
   type NewExternalWorktreesInboxActionState
 } from '../../new-external-worktrees-inbox-actions'
 import { buildNewExternalWorktreesInboxCandidates } from '../../new-external-worktrees-inbox-candidates'
-
-function omitRepoIds<T>(
-  candidates: ReadonlyMap<string, T>,
-  omittedRepoIds: ReadonlySet<string>
-): Map<string, T> {
-  if (omittedRepoIds.size === 0) {
-    return candidates instanceof Map ? candidates : new Map(candidates)
-  }
-  return new Map([...candidates].filter(([repoId]) => !omittedRepoIds.has(repoId)))
-}
 
 // The two sidebar notice rows for worktrees Orca detected but does not yet show, plus the
 // pending/error state their inline actions surface.
@@ -45,8 +31,6 @@ export function useSidebarExternalWorktreeCards(args: {
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const settings = useAppStore((s) => s.settings)
   const visibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
-  const sshTargetHostsById = useAppStore((s) => s.sshTargetHostsById)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
   >(new Map())
@@ -57,7 +41,7 @@ export function useSidebarExternalWorktreeCards(args: {
     string | null
   >(null)
 
-  const allImportedWorktreesByRepo = useMemo(() => {
+  const importedWorktreesByRepo = useMemo(() => {
     const forceVisibleRepoIds = new Set(
       [...importedWorktreeCardActionState.entries()]
         .filter(([, state]) => state.forceVisible)
@@ -79,7 +63,7 @@ export function useSidebarExternalWorktreeCards(args: {
     visibilityDefaultsByHost,
     visibleReposForRows
   ])
-  const allNewExternalWorktreesInboxByRepo = useMemo(
+  const newExternalWorktreesInboxByRepo = useMemo(
     () =>
       buildNewExternalWorktreesInboxCandidates({
         repos: visibleReposForRows,
@@ -95,42 +79,6 @@ export function useSidebarExternalWorktreeCards(args: {
       visibilityDefaultsByHost,
       visibleReposForRows
     ]
-  )
-
-  // Why: one machine paired both as a direct SSH target and as a runtime
-  // environment gives a single checkout two repo records, each with its own
-  // hidden-worktree state — and so two identical notice rows for one directory.
-  const duplicateCheckoutRepoIds = useMemo(() => {
-    const noticeRepoIds = new Set([
-      ...allImportedWorktreesByRepo.keys(),
-      ...allNewExternalWorktreesInboxByRepo.keys()
-    ])
-    if (noticeRepoIds.size < 2) {
-      return new Set<string>()
-    }
-    return getDuplicateCheckoutNoticeRepoIds({
-      repos: visibleReposForRows,
-      noticeRepoIds,
-      checkoutKeyByRepoId: buildRepoCheckoutKeys({
-        repos: visibleReposForRows,
-        sshTargetHostsById,
-        runtimeEnvironments
-      })
-    })
-  }, [
-    allImportedWorktreesByRepo,
-    allNewExternalWorktreesInboxByRepo,
-    runtimeEnvironments,
-    sshTargetHostsById,
-    visibleReposForRows
-  ])
-  const importedWorktreesByRepo = useMemo(
-    () => omitRepoIds(allImportedWorktreesByRepo, duplicateCheckoutRepoIds),
-    [allImportedWorktreesByRepo, duplicateCheckoutRepoIds]
-  )
-  const newExternalWorktreesInboxByRepo = useMemo(
-    () => omitRepoIds(allNewExternalWorktreesInboxByRepo, duplicateCheckoutRepoIds),
-    [allNewExternalWorktreesInboxByRepo, duplicateCheckoutRepoIds]
   )
 
   const setImportedWorktreeCardState = useCallback(
