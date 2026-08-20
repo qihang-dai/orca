@@ -4,6 +4,8 @@ import { ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import NoticeHostGlyph from './NoticeHostGlyph'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 type NewExternalWorktreesInboxLineProps = {
@@ -11,6 +13,7 @@ type NewExternalWorktreesInboxLineProps = {
   /** Host this checkout lives on. Set only when the project is checked out on
    *  more than one host, where the count alone cannot identify the row. */
   hostContextLabel?: string
+  hostContextHostId?: ExecutionHostId
   inboxCount: number
   pending: boolean
   error: string | null
@@ -22,6 +25,7 @@ type NewExternalWorktreesInboxLineProps = {
 export default function NewExternalWorktreesInboxLine({
   repoDisplayName,
   hostContextLabel,
+  hostContextHostId,
   inboxCount,
   pending,
   error,
@@ -97,8 +101,13 @@ export default function NewExternalWorktreesInboxLine({
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{countLabel}</span>
           {hostContextLabel ? (
-            <span className="min-w-0 shrink truncate text-[10px] leading-none text-muted-foreground">
-              {hostContextLabel}
+            <span className="inline-flex min-w-0 shrink items-center gap-1">
+              {hostContextHostId ? (
+                <NoticeHostGlyph hostId={hostContextHostId} hostLabel={hostContextLabel} />
+              ) : null}
+              <span className="min-w-0 truncate text-[10px] leading-none text-muted-foreground">
+                {hostContextLabel}
+              </span>
             </span>
           ) : null}
           <ChevronRight

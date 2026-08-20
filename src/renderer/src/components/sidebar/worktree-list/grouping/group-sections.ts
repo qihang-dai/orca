@@ -8,6 +8,7 @@ import {
 } from '../../workspace-status'
 import { PROJECT_GROUP_META, PR_GROUP_META } from './group-keys'
 import type { PRGroupKey } from './group-keys'
+import type { NoticeHostContext } from './host-labels'
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
@@ -44,7 +45,7 @@ export type SectionAppendContext = {
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
-  noticeHostContextLabelByRepoId: Map<string, string> | undefined
+  noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean

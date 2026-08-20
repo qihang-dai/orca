@@ -70,13 +70,20 @@ export function getMixedHostContextLabels(
  * eligible for a label. Deriving both from the filtered set would make a label
  * appear and disappear with the sidebar's host filter.
  */
+export type NoticeHostContext = {
+  label: string
+  /** Carried so the row can draw the same host glyph and "Project on …"
+   *  tooltip worktree cards use, which the label alone cannot select. */
+  hostId: ExecutionHostId
+}
+
 export function getNoticeHostContextLabels(
   noticeRepoIds: Iterable<string>,
   allRepoIds: Iterable<string>,
   repoMap: Map<string, Repo>,
   projectIndex: ProjectGroupingIndex | null,
   hostLabelById: ReadonlyMap<string, string> | undefined
-): Map<string, string> | undefined {
+): Map<string, NoticeHostContext> | undefined {
   const eligible = new Set(noticeRepoIds)
   if (eligible.size === 0) {
     return undefined
@@ -85,7 +92,7 @@ export function getNoticeHostContextLabels(
   // that project spans hosts just the same — counting labels hides exactly the
   // case where the rows are hardest to tell apart.
   const hostIdsForProject = new Map<string, Set<string>>()
-  const labelsByRepoId = new Map<string, string>()
+  const labelsByRepoId = new Map<string, NoticeHostContext>()
   const projectKeyByRepoId = new Map<string, string>()
   for (const repoId of allRepoIds) {
     const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
@@ -99,16 +106,16 @@ export function getNoticeHostContextLabels(
       hostIds.add(hostId)
       hostIdsForProject.set(projectKey, hostIds)
     }
-    if (eligible.has(repoId)) {
-      labelsByRepoId.set(repoId, label)
+    if (eligible.has(repoId) && hostId) {
+      labelsByRepoId.set(repoId, { label, hostId: hostId as ExecutionHostId })
       projectKeyByRepoId.set(repoId, projectKey)
     }
   }
-  const mixed = new Map<string, string>()
-  for (const [repoId, label] of labelsByRepoId) {
+  const mixed = new Map<string, NoticeHostContext>()
+  for (const [repoId, context] of labelsByRepoId) {
     const projectKey = projectKeyByRepoId.get(repoId)
     if (projectKey && (hostIdsForProject.get(projectKey)?.size ?? 0) > 1) {
-      mixed.set(repoId, label)
+      mixed.set(repoId, context)
     }
   }
   return mixed.size > 0 ? mixed : undefined

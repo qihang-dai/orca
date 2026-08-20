@@ -126,10 +126,13 @@ function noticeRows(args: {
 
 function summarize(
   rows: Extract<Row, { type: 'new-external-worktrees-inbox' }>[]
-): { repoId: string; label: string | undefined; count: number }[] {
+): { repoId: string; label: string | undefined; hostId: string | undefined; count: number }[] {
   return rows.map((row) => ({
     repoId: row.repo.id,
     label: row.hostContextLabel,
+    // Carried so the row can draw the host glyph; two hosts sharing a label
+    // differ only here.
+    hostId: row.hostContextHostId,
     count: row.inboxWorktrees.length
   }))
 }
@@ -154,8 +157,8 @@ describe('discovery notice rows on a multi-host project', () => {
         })
       )
     ).toEqual([
-      { repoId: sshTwin.id, label: 'openclaw', count: 61 },
-      { repoId: envTwin.id, label: 'openclaw', count: 134 }
+      { repoId: sshTwin.id, label: 'openclaw', hostId: SSH_HOST_ID, count: 61 },
+      { repoId: envTwin.id, label: 'openclaw', hostId: ENV_HOST_ID, count: 134 }
     ])
   })
 
@@ -163,7 +166,7 @@ describe('discovery notice rows on a multi-host project', () => {
     // Kills notice-row-scoped membership: only one record emits a row, but the
     // project still spans hosts, so the row must say which host it is.
     expect(summarize(noticeRows({ eligibleRepoIds: [envTwin.id] }))).toEqual([
-      { repoId: envTwin.id, label: 'openclaw', count: 134 }
+      { repoId: envTwin.id, label: 'openclaw', hostId: ENV_HOST_ID, count: 134 }
     ])
   })
 
@@ -171,10 +174,10 @@ describe('discovery notice rows on a multi-host project', () => {
     // Kills the collapse (both rows survive with distinct counts) and proves the
     // gate reads the unfiltered universe (each filtered survivor keeps its label).
     expect(summarize(noticeRows({ eligibleRepoIds: [sshTwin.id] }))).toEqual([
-      { repoId: sshTwin.id, label: 'openclaw', count: 61 }
+      { repoId: sshTwin.id, label: 'openclaw', hostId: SSH_HOST_ID, count: 61 }
     ])
     expect(summarize(noticeRows({ eligibleRepoIds: [envTwin.id] }))).toEqual([
-      { repoId: envTwin.id, label: 'openclaw', count: 134 }
+      { repoId: envTwin.id, label: 'openclaw', hostId: ENV_HOST_ID, count: 134 }
     ])
   })
 

@@ -5,6 +5,7 @@ import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-h
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { PINNED_GROUP_KEY, PINNED_GROUP_META } from './group-keys'
 import { appendWorktreeRows, buildImportedWorktreesCardRow } from './row-builders'
+import type { NoticeHostContext } from './host-labels'
 import type { ImportedWorktreesCardCandidate, Row } from './row-types'
 
 /**
@@ -26,7 +27,7 @@ export function emitPinnedGroup(
   worktreeMap: Map<string, Worktree>,
   nestLineage: boolean,
   cyclicLineageIds: ReadonlySet<string>,
-  noticeHostContextLabelByRepoId?: ReadonlyMap<string, string>
+  noticeHostContextLabelByRepoId?: ReadonlyMap<string, NoticeHostContext>
 ): void {
   if (pinnedSectionWorktrees.length === 0) {
     return
