@@ -156,3 +156,34 @@ describe('a cooked querier still gets its answer (#12112)', () => {
     )
   }
 })
+
+// Without this the fix can go silently inert: on a kernel that does not redirect a
+// master's mode ioctls to the slave, the probe could only ever answer 'echoing', every
+// other assertion in this file would still pass, and the same-turn path would never
+// fire. This is the one assertion that fails loudly on such a kernel.
+describe('the native probe can actually observe a quiet slave', () => {
+  itOnPosix('reads echoing while cooked and quiet once the child clears ECHO', async () => {
+    const nodePty = await import('node-pty')
+    const support = resolveNodePtyEchoStateSupport(nodePty)
+    if (!support.available) {
+      expect(nodePtyEchoStateRequirementViolation(support)).toBeNull()
+      console.warn(`[skip] ${support.reason} ${NODE_PTY_SOURCE_BUILD_HINT}`)
+      return
+    }
+
+    const pty = nodePty.spawn('/bin/sh', ['-c', 'stty -echo; sleep 2'], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24
+    })
+    try {
+      const probe = createPtySlaveEchoSyncProbe(pty)
+      expect(probe).toBeDefined()
+      // A freshly spawned pty is cooked, so the slave's ECHO must read as set.
+      expect(probe?.()).toBe<PtySlaveLineDisciplineEcho>('echoing')
+      expect(await waitUntil(() => probe?.() === 'quiet', 4_000)).toBe(true)
+    } finally {
+      pty.kill()
+    }
+  })
+})

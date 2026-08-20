@@ -110,6 +110,11 @@ export class PtyStartupReplyDelivery {
     private readonly echoSyncProbe?: PtySlaveEchoSyncProbe
   ) {}
 
+  /** True while a reply is queued but unwritten, so later writes must not overtake it. */
+  get hasDeferredWrites(): boolean {
+    return this.pendingWrites.length > 0
+  }
+
   get hasExpectedEcho(): boolean {
     return this.expectedEchoes.length > 0
   }

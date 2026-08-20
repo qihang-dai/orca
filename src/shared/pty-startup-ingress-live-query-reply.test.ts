@@ -187,7 +187,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
-  it('writes a CPR reply straight through when nothing is deferred', async () => {
+  it('declines a CPR when nothing is deferred, leaving it on the host path', async () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const ingress = new PtyStartupIngress({
@@ -197,15 +197,18 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       onEmission: () => {}
     })
 
-    expect(ingress.answerLiveQueryReply(CPR_REPLY)).toBe(true)
-    expect(writes).toEqual([CPR_REPLY])
+    // Declining is what keeps the host's own queues in play — notably the daemon's
+    // post-ready flush gate, which a CPR written past would splice into the buffered
+    // startup command.
+    expect(ingress.answerLiveQueryReply(CPR_REPLY)).toBe(false)
+    expect(writes).toEqual([])
     expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(0)
-    expect(writes).toEqual([CPR_REPLY, OSC_COLOR_REPLY])
+    expect(writes).toEqual([OSC_COLOR_REPLY])
     ingress.drainAndClose()
   })
 
-  it('projects a queued ordered reply, but not one written with an empty queue', async () => {
+  it('projects a queued ordered reply, but never a declined one', async () => {
     vi.useFakeTimers()
     const unqueued: PtyIngressEmission[] = []
     const solo = new PtyStartupIngress({
@@ -214,8 +217,8 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       write: () => {},
       onEmission: (emission) => unqueued.push(emission)
     })
-    // Nothing deferred, so it is written in this turn and cannot be echoed late.
-    expect(solo.answerLiveQueryReply(CPR_REPLY)).toBe(true)
+    // Nothing deferred: the delivery declines it, so it can never be projected.
+    expect(solo.answerLiveQueryReply(CPR_REPLY)).toBe(false)
     solo.accept(POSIX_CSI_COOKED_ECHO(CPR_REPLY))
     expect(visible(unqueued)).toBe(POSIX_CSI_COOKED_ECHO(CPR_REPLY))
     solo.drainAndClose()
@@ -325,9 +328,9 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
         onEmission: () => {}
       })
       expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
-      expect(ingress.answerLiveQueryReply(CPR_REPLY)).toBe(true)
-      // Never queued on a backend that does not defer, so order is the write order.
-      expect(writes).toEqual([OSC_COLOR_REPLY, CPR_REPLY])
+      // Nothing ever defers here, so a CPR is always the host's to write.
+      expect(ingress.answerLiveQueryReply(CPR_REPLY)).toBe(false)
+      expect(writes).toEqual([OSC_COLOR_REPLY])
       ingress.drainAndClose()
     }
   })
@@ -436,6 +439,31 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.accept(POSIX_CSI_COOKED_ECHO(lastReply))
     expect(visible(emissions)).toContain('rgb:00')
     expect(visible(emissions)).not.toContain('rgb:64')
+    ingress.drainAndClose()
+  })
+  // The guard protects the answer() path specifically: a SECOND echo-risk reply arriving
+  // while a probe is in flight re-enters armWriteTimer, where writeTimer is already null.
+  // (answerInOrder never arms, so it cannot reach this.)
+  it('does not fork a second probe when a reply arrives mid-probe', async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      echoProbe: () => {
+        calls += 1
+        return new Promise(() => {})
+      },
+      write: () => {},
+      onEmission: () => {}
+    })
+
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toBe(1)
+    // A live theme flip answers a second colour query while the first probe is pending.
+    expect(ingress.answerLiveQueryReply('\x1b]10;rgb:ff/ff/ff\x07')).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toBe(1)
     ingress.drainAndClose()
   })
 })

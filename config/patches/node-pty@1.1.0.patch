@@ -232,10 +232,9 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..555d8835ad6539c7091445207b5009b6
 + * Slave line discipline ECHO bit -> 1 set, 0 clear, -1 unreadable.
 + *
 + * Orca: Linux and the BSDs redirect a master's mode ioctls to the slave (POSIX does
-+ * not specify master termios), so this reads the slave's ECHO with no fork and no
-+ * extra fd. A kernel that did not redirect would
-+ * answer from the master's own termios, whose ECHO defaults SET — so the degraded
-+ * answer is "echoing", never a false "quiet".
++ * not specify it), so this reads the slave's ECHO with no fork and no extra fd. A
++ * kernel that did not redirect would answer from the master's own termios, whose
++ * ECHO defaults SET — so the degraded answer is "echoing", never a false "quiet".
 + */
 +Napi::Value PtyEchoState(const Napi::CallbackInfo& info) {
 +  Napi::Env env(info.Env());

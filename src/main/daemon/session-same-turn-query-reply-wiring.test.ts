@@ -120,4 +120,22 @@ describe('Session hands its subprocess ECHO probe to the startup ingress (#13892
     vi.runOnlyPendingTimers()
     expect(written).toEqual([OSC11_REPLY, '\x1b[?1;2c', '\x1b[1;1R'])
   })
+  // A query reply must not jump the post-ready flush gate: the startup command is parked
+  // there, and a CPR written ahead of it is read by the shell's line editor as an unbound
+  // key plus literal text, so the shell runs `4;1Recho ...` and the agent never launches.
+  it('keeps a CPR reply behind the buffered startup command', async () => {
+    const { handle, written } = createSubprocess(() => 'quiet')
+    const session = new Session({
+      id: 'sess-gate',
+      subprocess: handle,
+      shellReadySupported: true
+    } as never)
+
+    session.write('claude\n')
+    session.write('\x1b[24;1R')
+
+    // Still parked: neither byte has reached the PTY while the gate holds.
+    expect(written.join('')).not.toContain('24;1R')
+    session.dispose?.()
+  })
 })
